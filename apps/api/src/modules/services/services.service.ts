@@ -15,9 +15,10 @@ export class ServicesService {
   }
 
   async create(input: CreateServiceInput) {
+    const escalationPolicyId = await this.requirePolicy(input.escalationPolicyId);
     try {
       return await tenantDb().service.create({
-        data: { orgId: getTenantOrgId(), name: input.name },
+        data: { orgId: getTenantOrgId(), name: input.name, escalationPolicyId },
       });
     } catch {
       throw new ConflictException("A service with that name already exists");
@@ -26,6 +27,10 @@ export class ServicesService {
 
   async update(id: string, input: UpdateServiceInput) {
     await this.get(id);
+    const escalationPolicyId =
+      input.escalationPolicyId === undefined
+        ? undefined
+        : await this.requirePolicy(input.escalationPolicyId);
     return tenantDb().service.update({
       where: { id },
       data: {
@@ -33,6 +38,7 @@ export class ServicesService {
         ...(input.currentStatus !== undefined
           ? { currentStatus: input.currentStatus }
           : {}),
+        ...(escalationPolicyId !== undefined ? { escalationPolicyId } : {}),
       },
     });
   }
@@ -41,5 +47,15 @@ export class ServicesService {
     await this.get(id);
     await tenantDb().service.delete({ where: { id } });
     return { ok: true };
+  }
+
+  private async requirePolicy(policyId: string | null | undefined) {
+    if (policyId === undefined) return undefined;
+    if (policyId === null) return null;
+    const policy = await tenantDb().escalationPolicy.findFirst({
+      where: { id: policyId },
+    });
+    if (!policy) throw new NotFoundException("Escalation policy not found");
+    return policy.id;
   }
 }
