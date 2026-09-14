@@ -14,6 +14,12 @@ export class IncidentsController {
     return this.incidents.list();
   }
 
+  @Get(":id/timeline")
+  @RequirePermission("incident:read")
+  timeline(@Param("id") id: string) {
+    return this.incidents.timeline(id);
+  }
+
   @Get(":id")
   @RequirePermission("incident:read")
   get(@Param("id") id: string) {
