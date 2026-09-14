@@ -1,6 +1,7 @@
 import type { Job } from "bullmq";
+import { ESCALATE_INCIDENT_JOB } from "@waypoint/shared-types";
 
-export const ESCALATE_INCIDENT_JOB = "escalate-incident";
+export { ESCALATE_INCIDENT_JOB };
 
 export type EscalateIncidentPayload = {
   incidentId: string;

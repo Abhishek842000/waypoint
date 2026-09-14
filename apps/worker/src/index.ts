@@ -1,5 +1,9 @@
-import { Worker } from "bullmq";
+import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
+import {
+  ADVANCE_ROTATIONS_JOB,
+  advanceRotationsJob,
+} from "./jobs/advance-rotations.job";
 import {
   DELIVER_NOTIFICATION_JOB,
   deliverNotification,
@@ -22,14 +26,32 @@ async function main() {
     connection,
     concurrency: Number(process.env.WORKER_CONCURRENCY ?? 5),
   });
+  const rotationWorker = new Worker(ADVANCE_ROTATIONS_JOB, advanceRotationsJob, {
+    connection,
+    concurrency: 1,
+  });
+
+  const rotationQueue = new Queue(ADVANCE_ROTATIONS_JOB, { connection });
+  await rotationQueue.add(
+    "tick",
+    {},
+    {
+      repeat: { every: 60_000 },
+      jobId: "advance-rotations-tick",
+    },
+  );
 
   escalateWorker.on("ready", () => console.log("[worker] escalate-incident ready"));
   notifyWorker.on("ready", () => console.log("[worker] deliver-notification ready"));
+  rotationWorker.on("ready", () => console.log("[worker] advance-rotations ready"));
   escalateWorker.on("failed", (job, err) =>
     console.error("[worker] escalate failed", job?.id, err),
   );
   notifyWorker.on("failed", (job, err) =>
     console.error("[worker] notify failed", job?.id, err),
+  );
+  rotationWorker.on("failed", (job, err) =>
+    console.error("[worker] rotation advance failed", job?.id, err),
   );
 
   console.log("Waypoint worker started");

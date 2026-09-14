@@ -1,6 +1,7 @@
 import type { Job } from "bullmq";
+import { DELIVER_NOTIFICATION_JOB } from "@waypoint/shared-types";
 
-export const DELIVER_NOTIFICATION_JOB = "deliver-notification";
+export { DELIVER_NOTIFICATION_JOB };
 
 export type DeliverNotificationPayload = {
   orgId: string;
