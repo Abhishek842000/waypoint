@@ -34,7 +34,7 @@ pnpm test:e2e
 
 ## Live demo
 
-The intended demo is **local** (`pnpm dev`). Open http://localhost:3000, register an org, and use the GIF below for the core loop. Optional cloud steps live in [docs/deploy.md](docs/deploy.md) if you ever want Vercel/Railway; they are not required.
+The intended demo is **local** (`pnpm dev`). Open http://localhost:3000, register an org, or watch the walkthrough: **[demo.mp4](docs/demo.mp4)** (QuickTime) / **[demo.webm](docs/demo.webm)**. Optional cloud steps live in [docs/deploy.md](docs/deploy.md) if you ever want Vercel/Railway; they are not required.
 
 | Surface | URL |
 | --- | --- |
@@ -85,16 +85,21 @@ flowchart LR
 | Frontend | Next.js App Router | `(dashboard)` is structurally separate from `/status/[orgSlug]` |
 | Monorepo | pnpm workspaces | Solo-dev velocity |
 
-## Demo GIF
+## Demo video
 
-Playwright recording of the core loop: register org → invite / service / policy → API-key trigger → escalate → ack → resolve → public page operational.
+~47s Playwright walkthrough: register org → invite responder → service → on-call rotation → escalation policy → trigger incident → BullMQ escalate → ack → resolve → public page operational.
+
+- **[docs/demo.mp4](docs/demo.mp4)** — H.264, plays in QuickTime / Finder
+- **[docs/demo.webm](docs/demo.webm)** — original Playwright capture
 
 ![Waypoint core loop](docs/demo.gif)
 
 ```bash
-RECORD_DEMO=1 pnpm test:e2e
-# Optional: extract a GIF from the Playwright video (full ffmpeg, not the Playwright build):
-# ffmpeg -y -i test-results/**/video.webm -vf fps=8,scale=960:-1 docs/demo.gif
+# Stack must be up (web, api, worker). Worker delay multiplier 0.05 so 1 policy-minute ≈ 3s.
+RECORD_DEMO=1 pnpm demo:record
+# Optional: copy/convert the Playwright webm
+# cp test-results/**/video.webm docs/demo.webm
+# ffmpeg -y -i docs/demo.webm -c:v libx264 -pix_fmt yuv420p -movflags +faststart docs/demo.mp4
 ```
 
 ## Prove the interesting bits

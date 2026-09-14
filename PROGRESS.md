@@ -23,7 +23,7 @@ Hiring-manager resume notes live here so a new chat can pick up without rediscov
 - CI: `typecheck` + Vitest on every PR; Playwright `e2e` job starts api/worker/web in the same step as the tests.
 - Optional deploy workflow on `main` (Vercel/Railway) skips until tokens exist — **localhost is the demo**.
 - API-key `POST /v1/incidents` rate limit (default 30/min/org, in-process fixed window). Session creates are not throttled. Still `@RequirePermission("incident:create")` + `tenantDb()`.
-- README: architecture, ~10 minute clone path, BullMQ-vs-cron and tenancy rationale, honest more-time list. Demo GIF at `docs/demo.gif`.
+- README: architecture, ~10 minute clone path, BullMQ-vs-cron and tenancy rationale, honest more-time list. Demo video at `docs/demo.mp4` (GIF still at `docs/demo.gif`).
 
 ### Phase 4
 - Org-scoped SSE; public status allow-list + ISR; service health from open incidents.
