@@ -1,42 +1,17 @@
-import { Controller, Get, NotFoundException, Param } from "@nestjs/common";
-import { runWithTenant, tenantDb, unscopedDb } from "@waypoint/db";
+import { Controller, Get, Header, Inject, Param } from "@nestjs/common";
 import { Public } from "../../common/public.decorator";
+import { PublicStatusService } from "./public-status.service";
 
-/**
- * Unauthenticated status payload. Still goes through tenantDb() after
- * resolving the org slug — public does not mean unscoped.
- */
 @Controller("public")
 export class PublicStatusController {
+  constructor(
+    @Inject(PublicStatusService) private readonly publicStatus: PublicStatusService,
+  ) {}
+
   @Public()
   @Get("status/:orgSlug")
-  async bySlug(@Param("orgSlug") orgSlug: string) {
-    const org = await unscopedDb().org.findUnique({ where: { slug: orgSlug } });
-    if (!org) throw new NotFoundException("Status page not found");
-
-    return runWithTenant(org.id, async () => {
-      const services = await tenantDb().service.findMany({
-        orderBy: { name: "asc" },
-      });
-      const openIncidents = await tenantDb().incident.findMany({
-        where: { status: { not: "resolved" } },
-        orderBy: { createdAt: "desc" },
-      });
-      return {
-        org: { name: org.name, slug: org.slug },
-        services: services.map((s) => ({
-          id: s.id,
-          name: s.name,
-          currentStatus: s.currentStatus,
-        })),
-        incidents: openIncidents.map((i) => ({
-          id: i.id,
-          title: i.title,
-          status: i.status,
-          severity: i.severity,
-          createdAt: i.createdAt,
-        })),
-      };
-    });
+  @Header("Cache-Control", "public, max-age=5, s-maxage=5, stale-while-revalidate=15")
+  bySlug(@Param("orgSlug") orgSlug: string) {
+    return this.publicStatus.bySlug(orgSlug);
   }
 }
