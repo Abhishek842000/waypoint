@@ -115,7 +115,11 @@ export class AuthController {
   @HttpCode(200)
   @Post("logout")
   logout(@Res({ passthrough: true }) res: Response) {
-    res.clearCookie(SESSION_COOKIE, { path: "/" });
+    res.clearCookie(SESSION_COOKIE, {
+      path: "/",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
     return { ok: true };
   }
 
@@ -144,10 +148,12 @@ export class AuthController {
 }
 
 function setSessionCookie(res: Response, token: string) {
+  const isProd = process.env.NODE_ENV === "production";
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    // Cross-site Vercel (web) → Railway (API) needs None+Secure.
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
     path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });

@@ -2,12 +2,14 @@ import { INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { unscopedDb } from "@waypoint/db";
 import { getFakeJobClock, resetCapturedNotificationPosts, resetRealtimeBus } from "@waypoint/jobs";
+import { resetIncidentCreateRateLimits } from "../../apps/api/src/modules/incidents/incident-create-rate-limit";
 import { createApp } from "../../apps/api/src/main";
 
 export async function resetDatabase() {
   getFakeJobClock().reset();
   resetCapturedNotificationPosts();
   resetRealtimeBus();
+  resetIncidentCreateRateLimits();
   await unscopedDb().$executeRawUnsafe(`
     TRUNCATE TABLE
       "IncidentEvent",

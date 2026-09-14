@@ -4,9 +4,43 @@ Multi-tenant incident response and public status pages — a PagerDuty + Statusp
 
 Organizations define services and on-call rotations. When something breaks, an incident is opened, responders act on a real state machine, and an **unauthenticated** status page reflects that org’s current and historical status. Every query is tenant-scoped at the data-access layer. Every mutating endpoint is gated by RBAC on the API, not by frontend route guards.
 
-> Phase 4: authenticated org-scoped SSE for live incident updates. Public `/status/:orgSlug` is a separate Next.js tree (no auth, ISR + on-demand revalidation) and is allow-listed so member emails never appear.
+## Quickstart (local, ~10 minutes)
 
-## Architecture
+Requires Docker, Node 22, and pnpm 9.
+
+```bash
+git clone https://github.com/Abhishek842000/waypoint.git
+cd waypoint
+cp .env.example .env
+docker compose up -d postgres redis
+pnpm install
+pnpm db:migrate:deploy
+pnpm test                 # unit + integration (tenancy, RBAC, escalation, SSE)
+pnpm dev                  # web :3000, api :3001, worker
+```
+
+- Dashboard: http://localhost:3000 — register an org (you become admin)
+- API health: http://localhost:3001/health
+- Public status: http://localhost:3000/status/&lt;org-slug&gt; (no login)
+
+Postgres is on **host port 5433** so it does not collide with a local 5432. Inside Compose the DB still listens on 5432.
+
+Playwright core loop (needs the stack up, or Playwright will start `pnpm dev`):
+
+```bash
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+## Live demo
+
+The intended demo is **local** (`pnpm dev`). Open http://localhost:3000, register an org, and use the GIF below for the core loop. Optional cloud steps live in [docs/deploy.md](docs/deploy.md) if you ever want Vercel/Railway; they are not required.
+
+| Surface | URL |
+| --- | --- |
+| Web | http://localhost:3000 |
+| API health | http://localhost:3001/health |
+| Public status | http://localhost:3000/status/&lt;org-slug&gt; |
 
 ## Architecture
 
@@ -21,8 +55,9 @@ flowchart LR
   subgraph edge [API]
     Auth["AuthGuard<br/>session JWT or API key"]
     RBAC["PermissionsGuard<br/>@RequirePermission"]
+    Throttle["API-key create rate limit"]
     Tenant["tenantDb()<br/>Prisma extension + ALS"]
-    Nest["NestJS /v1 + SSE /v1/realtime/incidents"]
+    Nest["NestJS /v1 + SSE"]
   end
 
   subgraph data [Data plane]
@@ -34,7 +69,7 @@ flowchart LR
   Web --> Auth
   Status --> Nest
   Ext --> Auth
-  Auth --> RBAC --> Tenant --> PG
+  Auth --> RBAC --> Throttle --> Tenant --> PG
   Worker --> Redis
   Worker --> Tenant
 ```
@@ -44,37 +79,25 @@ flowchart LR
 | API | NestJS | Guards/decorators map 1:1 onto RBAC; modules match the domain |
 | DB | Prisma | Client extension can *force* `orgId` onto every tenant query |
 | Auth | Nest JWT cookie + API keys | Auth lives on the API (source of truth for actor/org/scopes). Auth.js would split session auth into Next and leave API keys on Nest |
-| Jobs | BullMQ worker | Escalation must survive process restart — never `setTimeout` |
-| Frontend | Next.js App Router | Dashboard route group is structurally separate from `/status/[orgSlug]`; public page uses 10s ISR + on-demand revalidate |
-| Monorepo | pnpm workspaces | Solo-dev velocity; Turbo can land later if build graphs hurt |
+| Jobs | **BullMQ**, not cron / `setTimeout` | Escalation must survive process restart. Cron would poll; `setTimeout` dies with the process. Delayed jobs live in Redis. |
+| Tenancy | Prisma extension + AsyncLocalStorage | Controllers cannot forget a `WHERE org_id =`. `tenantDb()` refuses to run without context and overwrites caller-supplied `orgId` on create. |
+| Live UI | SSE | Cookie auth, one-way fan-out; ack/resolve still POST through RBAC |
+| Frontend | Next.js App Router | `(dashboard)` is structurally separate from `/status/[orgSlug]` |
+| Monorepo | pnpm workspaces | Solo-dev velocity |
 
-Tenancy is not an `org_id` filter sprinkled in controllers. `tenantDb()` refuses to run without AsyncLocalStorage context and **overwrites** any caller-supplied `orgId` on create.
+## Demo GIF
 
-## Local setup
+Playwright recording of the core loop: register org → invite / service / policy → API-key trigger → escalate → ack → resolve → public page operational.
 
-Requires Docker, Node 22, and pnpm 9. Postgres is published on **host port 5433** so it does not collide with a local Postgres on 5432 (inside Compose the DB still listens on 5432).
-
-```bash
-cp .env.example .env
-docker compose up -d postgres redis
-pnpm install
-pnpm db:migrate:deploy   # after first install, or: pnpm --filter @waypoint/db migrate
-pnpm test
-pnpm dev                 # api :3001, web :3000, worker
-```
-
-Full stack in Docker (API + worker + web + Postgres + Redis):
+![Waypoint core loop](docs/demo.gif)
 
 ```bash
-docker compose up --build
+RECORD_DEMO=1 pnpm test:e2e
+# Optional: extract a GIF from the Playwright video (full ffmpeg, not the Playwright build):
+# ffmpeg -y -i test-results/**/video.webm -vf fps=8,scale=960:-1 docs/demo.gif
 ```
 
-- App: http://localhost:3000
-- API health: http://localhost:3001/health
-- Register **two** orgs in different browsers (or incognito) to see isolation
-- Public status: http://localhost:3000/status/&lt;org-slug&gt;
-
-### Prove the interesting bits
+## Prove the interesting bits
 
 1. Register Acme as Alice (admin). Create a service + incident.
 2. Register Globex as Bob. Bob’s incident list is empty; requesting Alice’s incident id returns **404**, not an empty body.
@@ -84,34 +107,37 @@ docker compose up --build
 6. Leave an incident unacked: with `ESCALATION_DELAY_MULTIPLIER=0.05` (3s per policy minute) it pages the next step on a BullMQ delay. Kill the worker, restart it, the job still fires — it was in Redis.
 7. Open the same incident as Alice and Riley. Riley acks; Alice’s timeline flips to acknowledged **without refresh** (org-scoped SSE).
 8. Open `/status/<acme-slug>` logged out. The service shows a major outage and the incident appears. Globex’s slug does not.
-9. CI runs lint + tenancy/RBAC/policy/escalation/SSE/public-status tests, including a spawned-worker restart spec, on every PR.
+9. Hammer `POST /v1/incidents` with an API key; the third request in a 2-per-window test (30/min in prod) returns **429**. Session creates are not throttled.
+10. CI: typecheck + unit/integration on every PR; Playwright e2e on the same stack.
 
-## Demo GIF
+## CI / CD
 
-_Placeholder — record after Phase 1 (escalation) when the loop is visible: trigger → page → ack in a second window → status page updates._
+- [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — lint/typecheck, Vitest (Postgres + Redis services), Playwright e2e.
+- Optional [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) and **[docs/deploy.md](docs/deploy.md)** if you later want Vercel/Railway. Not needed for the local demo.
 
-`docs/demo.gif`
+## What I'd do with more time
 
-## What I'd change with more time
-
-- Row-level security in Postgres as defense in depth on top of the Prisma extension
-- Real invite emails instead of admin-set passwords
-- Compiled API (`tsc` → `dist`) instead of `tsx` in production images
-- Multi-org users with an org switcher (JWT currently binds one membership)
-- Hosted Auth.js/Clerk if we wanted social login without owning password hashing
-- Cache-Control + CDN in front of the public status API (the Next route already uses 10s ISR + on-demand revalidate; the API also sends a short `Cache-Control`)
-- Calendar-based on-call (coverage, overrides, timezones). Rotations are a manual ordered list + weekly round-robin pointer advanced by a BullMQ repeatable job.
-- OpenAPI spec generated from the Nest controllers
+- Real **calendar-based on-call** (coverage, overrides, timezones). Rotations today are an ordered roster + weekly BullMQ pointer.
+- Per-service **subscriber notifications** (status-page email/SMS) distinct from on-call paging.
+- Incident **postmortem templates** and a write-up flow after resolve.
+- Postgres **row-level security** as defense in depth on top of the Prisma extension.
+- Redis-backed rate limits (today the limiter is per-process; fine for a single Railway replica).
+- Real invite emails instead of admin-set passwords.
+- Compiled API (`tsc` → `dist`) instead of `tsx` in production images.
+- Multi-org users with an org switcher (JWT currently binds one membership).
+- OpenAPI spec generated from the Nest controllers.
 
 ## Repo map
 
 ```
-apps/web          Next.js — (dashboard) vs /status/[orgSlug] (ISR + SSE on dashboard)
-apps/api          NestJS — auth, RBAC, tenancy, incidents, SSE /v1/realtime/incidents
+apps/web          Next.js — (dashboard) vs /status/[orgSlug]
+apps/api          NestJS — auth, RBAC, tenancy, SSE, API-key rate limit
 apps/worker       BullMQ: weekly rotation handoff + delayed incident escalation
 packages/db       Prisma schema + tenantDb()
 packages/jobs     Shared page/notify/schedule + org realtime bus
 packages/shared-types   Roles, permissions, incident states, public status allow-list
-tests/unit        Policy, rotation pointer, incident state machine, public payload
-tests/integration Tenancy + RBAC + escalation/Slack + SSE + public status isolation
+tests/unit        Policy, rotation, state machine, public payload, limiter
+tests/integration Tenancy + RBAC + escalation + SSE + rate limit
+tests/e2e         Playwright core loop
+docs/deploy.md    Vercel + Railway
 ```

@@ -240,7 +240,7 @@ export default function SettingsPage() {
             </p>
             <button type="submit">Create monitor key</button>
             {plaintext && (
-              <p>
+              <p data-testid="api-key-plaintext">
                 Copy now — it will not be shown again: <code>{plaintext}</code>
               </p>
             )}
