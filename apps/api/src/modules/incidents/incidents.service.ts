@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -12,13 +13,20 @@ import {
 import {
   IllegalIncidentTransitionError,
   assertIncidentTransition,
+  serviceStatusForSeverity,
+  worstServiceStatus,
   type Actor,
   type CreateIncidentInput,
   type IncidentStatus,
 } from "@waypoint/shared-types";
+import { PublicStatusRevalidateService } from "../orgs/public-status-revalidate.service";
 
 @Injectable()
 export class IncidentsService {
+  constructor(
+    @Inject(PublicStatusRevalidateService)
+    private readonly publicStatus: PublicStatusRevalidateService,
+  ) {}
   list() {
     return tenantDb().incident.findMany({
       orderBy: { createdAt: "desc" },
@@ -72,6 +80,8 @@ export class IncidentsService {
       actorId: actor.userId,
     });
 
+    await this.syncServiceHealth(input.serviceId);
+    await this.publicStatus.bump(orgId);
     return this.get(incident.id);
   }
 
@@ -125,7 +135,27 @@ export class IncidentsService {
     });
 
     await cancelIncidentEscalation(id);
+    await this.syncServiceHealth(incident.serviceId);
+    await this.publicStatus.bump(getTenantOrgId());
     return this.get(id);
+  }
+
+  /**
+   * Derive public service status from open incidents. Resolved incidents
+   * restore operational when nothing else is open for that service.
+   */
+  private async syncServiceHealth(serviceId: string) {
+    const open = await tenantDb().incident.findMany({
+      where: { serviceId, status: { not: "resolved" } },
+      select: { severity: true },
+    });
+    const currentStatus = worstServiceStatus(
+      open.map((row) => serviceStatusForSeverity(row.severity)),
+    );
+    await tenantDb().service.update({
+      where: { id: serviceId },
+      data: { currentStatus },
+    });
   }
 
   private async resolvePolicyId(policyId: string | null): Promise<string | null> {
