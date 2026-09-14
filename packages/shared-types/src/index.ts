@@ -5,3 +5,4 @@ export * from "./actor";
 export * from "./rotation";
 export * from "./policy";
 export * from "./jobs";
+export * from "./incident";
