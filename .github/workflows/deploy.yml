@@ -1,0 +1,81 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+# First-time: create the Vercel project with Root Directory `apps/web`, and
+# Railway services named `waypoint-api` / `waypoint-worker`. Then add the
+# secrets below. Jobs skip (success) until those secrets exist.
+jobs:
+  vercel-web:
+    name: Web → Vercel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check token
+        id: cfg
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "VERCEL_TOKEN not set; skipping web deploy."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.cfg.outputs.skip != 'true'
+        uses: actions/checkout@v4
+      - if: steps.cfg.outputs.skip != 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - if: steps.cfg.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - if: steps.cfg.outputs.skip != 'true'
+        run: pnpm install
+      - if: steps.cfg.outputs.skip != 'true'
+        name: Deploy apps/web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          npx vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+          npx vercel build --prod --token "$VERCEL_TOKEN"
+          npx vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
+
+  railway-api-worker:
+    name: API + worker → Railway
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check token
+        id: cfg
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "RAILWAY_TOKEN not set; skipping api/worker deploy."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.cfg.outputs.skip != 'true'
+        uses: actions/checkout@v4
+      - if: steps.cfg.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: steps.cfg.outputs.skip != 'true'
+        name: Install Railway CLI
+        run: npm i -g @railway/cli
+      - if: steps.cfg.outputs.skip != 'true'
+        name: Deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: |
+          railway up --service waypoint-api --detach --ci
+          railway up --service waypoint-worker --detach --ci

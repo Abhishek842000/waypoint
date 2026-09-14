@@ -1,0 +1,8 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Health checks are set per-service in the Railway dashboard.
+# The API uses GET /health; the worker has no HTTP listener.
+restartPolicyType = "ON_FAILURE"
