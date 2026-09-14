@@ -29,6 +29,15 @@ export default function IncidentDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
+  useEffect(() => {
+    if (incident?.status !== "triggered") return;
+    const id = window.setInterval(() => {
+      refresh().catch(() => undefined);
+    }, 2000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incident?.status, params.id]);
+
   async function act(action: "acknowledge" | "resolve") {
     setError(null);
     try {
