@@ -22,6 +22,13 @@ export {
   FakeClockScheduler,
 } from "./schedule";
 export { getEscalateQueue, getRedis } from "./queues";
+export {
+  publishOrgRealtime,
+  resetRealtimeBus,
+  startRealtimeSubscriber,
+  stopRealtimeSubscriber,
+  subscribeOrgRealtime,
+} from "./realtime";
 
 if (process.env.NODE_ENV === "test" || process.env.WAYPOINT_JOBS === "memory") {
   getFakeJobClock().setHandler(applyEscalationStep);
