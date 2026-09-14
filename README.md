@@ -4,7 +4,7 @@ Multi-tenant incident response and public status pages — a PagerDuty + Statusp
 
 Organizations define services and on-call rotations. When something breaks, an incident is opened, responders act on a real state machine, and an **unauthenticated** status page reflects that org’s current and historical status. Every query is tenant-scoped at the data-access layer. Every mutating endpoint is gated by RBAC on the API, not by frontend route guards.
 
-> Phase 1: services, rotations (weekly round-robin pointer via BullMQ), escalation policy steps. Incident auto-escalation timers are next — still not `setTimeout`.
+> Phase 2: guarded incident state machine, timeline = IncidentEvent log, Slack (then Twilio/Resend) via one dispatcher, BullMQ escalation delays — still not `setTimeout`.
 
 ## Architecture
 
@@ -78,7 +78,8 @@ docker compose up --build
 2. Register Globex as Bob. Bob’s incident list is empty; requesting Alice’s incident id returns **404**, not an empty body.
 3. In Acme settings, invite two responders. Create a rotation of 3 people and a 2-step policy (rotation, then a specific user). GET the policy and confirm step order + targets.
 4. Invite a **viewer**. They can read rotations/policies, but creating either returns **403**.
-5. CI runs lint + tenancy/RBAC/policy tests on every PR.
+5. Settings → Slack incoming webhook. Trigger an incident (or curl with an API key). Slack fires; GET `/v1/incidents/:id/timeline` shows the event. Ack as a responder; a viewer posting acknowledge gets **403**. Escalation to step 1 waits `waitMinutes` on BullMQ (ack cancels it).
+6. CI runs lint + tenancy/RBAC/policy/escalation tests on every PR.
 
 ## Demo GIF
 
@@ -102,9 +103,10 @@ _Placeholder — record after Phase 1 (escalation) when the loop is visible: tri
 ```
 apps/web          Next.js — (dashboard) vs /status/[orgSlug]
 apps/api          NestJS — auth, RBAC, tenancy, services, rotations, policies, incidents
-apps/worker       BullMQ: weekly rotation handoff (live) + escalation/notify stubs
+apps/worker       BullMQ: weekly rotation handoff + delayed incident escalation
 packages/db       Prisma schema + tenantDb()
+packages/jobs     Shared page/notify/schedule used by API and worker
 packages/shared-types   Roles, permissions, incident states, policy/rotation helpers
-tests/unit        Policy data model + rotation pointer
-tests/integration Tenancy isolation + RBAC boundary + rotation/policy CRUD
+tests/unit        Policy, rotation pointer, incident state machine
+tests/integration Tenancy + RBAC + rotation/policy CRUD + escalation/Slack/timeline
 ```

@@ -16,7 +16,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@waypoint/db": path.resolve(__dirname, "packages/db/src/index.ts"),
-      "@waypoint/shared-types": path.resolve(
+      "@waypoint/jobs": path.resolve(__dirname, "packages/jobs/src/index.ts"),
+    "@waypoint/shared-types": path.resolve(
         __dirname,
         "packages/shared-types/src/index.ts",
       ),

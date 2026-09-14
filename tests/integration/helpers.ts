@@ -1,13 +1,17 @@
 import { INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { unscopedDb } from "@waypoint/db";
+import { getFakeJobClock, resetCapturedNotificationPosts } from "@waypoint/jobs";
 import { createApp } from "../../apps/api/src/main";
 
 export async function resetDatabase() {
+  getFakeJobClock().reset();
+  resetCapturedNotificationPosts();
   await unscopedDb().$executeRawUnsafe(`
     TRUNCATE TABLE
       "IncidentEvent",
       "Incident",
+      "NotificationChannel",
       "ApiKey",
       "EscalationStep",
       "EscalationPolicy",

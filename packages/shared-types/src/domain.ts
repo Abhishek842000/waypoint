@@ -30,3 +30,7 @@ export type ServiceStatus = z.infer<typeof ServiceStatusSchema>;
 export const escalationTargetTypes = ["rotation", "user"] as const;
 export const EscalationTargetTypeSchema = z.enum(escalationTargetTypes);
 export type EscalationTargetType = z.infer<typeof EscalationTargetTypeSchema>;
+
+export const notificationChannelTypes = ["slack", "sms", "email"] as const;
+export const NotificationChannelTypeSchema = z.enum(notificationChannelTypes);
+export type NotificationChannelType = z.infer<typeof NotificationChannelTypeSchema>;

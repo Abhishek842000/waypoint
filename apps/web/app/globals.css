@@ -127,6 +127,8 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .badge.triggered { background: #3a1a1c; color: var(--danger); }
 .badge.acknowledged { background: #3a3218; color: var(--warn); }
 .badge.resolved { background: #163322; color: var(--ok); }
+.badge.escalated { background: #1d2a3c; color: var(--accent); }
+.badge.comment { background: #1c242e; color: var(--muted); }
 .badge.operational { background: #163322; color: var(--ok); }
 .badge.degraded, .badge.partial_outage { background: #3a3218; color: var(--warn); }
 .badge.major_outage { background: #3a1a1c; color: var(--danger); }

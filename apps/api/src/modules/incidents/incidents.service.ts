@@ -4,7 +4,18 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { tenantDb, getTenantOrgId } from "@waypoint/db";
-import type { Actor, CreateIncidentInput } from "@waypoint/shared-types";
+import {
+  cancelIncidentEscalation,
+  onIncidentOpened,
+  recordIncidentEvent,
+} from "@waypoint/jobs";
+import {
+  IllegalIncidentTransitionError,
+  assertIncidentTransition,
+  type Actor,
+  type CreateIncidentInput,
+  type IncidentStatus,
+} from "@waypoint/shared-types";
 
 @Injectable()
 export class IncidentsService {
@@ -24,11 +35,21 @@ export class IncidentsService {
     return incident;
   }
 
+  /** Same ordered log the UI timeline and the audit API both read. */
+  async timeline(id: string) {
+    const incident = await this.get(id);
+    return incident.events;
+  }
+
   async create(actor: Actor, input: CreateIncidentInput) {
     const service = await tenantDb().service.findFirst({
       where: { id: input.serviceId },
     });
     if (!service) throw new NotFoundException("Service not found");
+
+    const escalationPolicyId = await this.resolvePolicyId(
+      input.escalationPolicyId ?? service.escalationPolicyId,
+    );
 
     const orgId = getTenantOrgId();
     const incident = await tenantDb().incident.create({
@@ -38,80 +59,81 @@ export class IncidentsService {
         title: input.title,
         severity: input.severity,
         status: "triggered",
+        escalationPolicyId,
+        currentEscalationStep: 0,
       },
     });
 
-    await tenantDb().incidentEvent.create({
-      data: {
-        orgId,
-        incidentId: incident.id,
-        type: "triggered",
-        actorId: actor.userId,
-        payload: { title: input.title, severity: input.severity },
-      },
+    await onIncidentOpened({
+      incidentId: incident.id,
+      title: input.title,
+      severity: input.severity,
+      escalationPolicyId,
+      actorId: actor.userId,
     });
 
     return this.get(incident.id);
   }
 
-  async acknowledge(actor: Actor, id: string) {
+  acknowledge(actor: Actor, id: string) {
+    return this.transition(actor, id, "acknowledged");
+  }
+
+  resolve(actor: Actor, id: string) {
+    return this.transition(actor, id, "resolved");
+  }
+
+  /**
+   * Single write path for ack/resolve so the worker and HTTP layer cannot
+   * drift: guard the edge, persist status, append IncidentEvent, cancel jobs.
+   */
+  private async transition(actor: Actor, id: string, to: Exclude<IncidentStatus, "triggered">) {
     const incident = await this.get(id);
-    if (incident.status === "resolved") {
-      throw new ConflictException("Resolved incidents cannot be acknowledged");
-    }
-    if (incident.status === "acknowledged") {
-      throw new ConflictException("Incident is already acknowledged");
+    try {
+      assertIncidentTransition(incident.status, to);
+    } catch (err) {
+      if (err instanceof IllegalIncidentTransitionError) {
+        throw new ConflictException(err.message);
+      }
+      throw err;
     }
 
+    const now = new Date();
     await tenantDb().incident.update({
       where: { id },
-      data: {
-        status: "acknowledged",
-        acknowledgedAt: new Date(),
-        acknowledgedById: actor.userId,
-      },
+      data:
+        to === "acknowledged"
+          ? {
+              status: "acknowledged",
+              acknowledgedAt: now,
+              acknowledgedById: actor.userId,
+            }
+          : {
+              status: "resolved",
+              resolvedAt: now,
+              ...(incident.status === "triggered" && actor.userId
+                ? { acknowledgedAt: now, acknowledgedById: actor.userId }
+                : {}),
+            },
     });
 
-    await tenantDb().incidentEvent.create({
-      data: {
-        orgId: getTenantOrgId(),
-        incidentId: id,
-        type: "acknowledged",
-        actorId: actor.userId,
-        payload: { previousStatus: incident.status },
-      },
+    await recordIncidentEvent({
+      incidentId: id,
+      type: to,
+      actorId: actor.userId,
+      payload: { previousStatus: incident.status },
     });
 
+    await cancelIncidentEscalation(id);
     return this.get(id);
   }
 
-  async resolve(actor: Actor, id: string) {
-    const incident = await this.get(id);
-    if (incident.status === "resolved") {
-      throw new ConflictException("Incident is already resolved");
-    }
-
-    await tenantDb().incident.update({
-      where: { id },
-      data: {
-        status: "resolved",
-        resolvedAt: new Date(),
-        ...(incident.status === "triggered" && actor.userId
-          ? { acknowledgedAt: new Date(), acknowledgedById: actor.userId }
-          : {}),
-      },
+  private async resolvePolicyId(policyId: string | null): Promise<string | null> {
+    if (!policyId) return null;
+    const policy = await tenantDb().escalationPolicy.findFirst({
+      where: { id: policyId },
     });
-
-    await tenantDb().incidentEvent.create({
-      data: {
-        orgId: getTenantOrgId(),
-        incidentId: id,
-        type: "resolved",
-        actorId: actor.userId,
-        payload: { previousStatus: incident.status },
-      },
-    });
-
-    return this.get(id);
+    if (!policy) throw new NotFoundException("Escalation policy not found");
+    return policy.id;
   }
 }

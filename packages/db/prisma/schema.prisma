@@ -46,6 +46,12 @@ enum EscalationTargetType {
   user
 }
 
+enum NotificationChannelType {
+  slack
+  sms
+  email
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -67,12 +73,13 @@ model Org {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships        Membership[]
-  services           Service[]
-  rotations          Rotation[]
-  escalationPolicies EscalationPolicy[]
-  incidents          Incident[]
-  apiKeys            ApiKey[]
+  memberships           Membership[]
+  services              Service[]
+  rotations             Rotation[]
+  escalationPolicies    EscalationPolicy[]
+  incidents             Incident[]
+  apiKeys               ApiKey[]
+  notificationChannels  NotificationChannel[]
 }
 
 model Membership {
@@ -90,15 +97,17 @@ model Membership {
 }
 
 model Service {
-  id            String        @id @default(cuid())
-  orgId         String
-  name          String
-  currentStatus ServiceStatus @default(operational)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                  String        @id @default(cuid())
+  orgId               String
+  name                String
+  currentStatus       ServiceStatus @default(operational)
+  escalationPolicyId  String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
-  org       Org        @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  incidents Incident[]
+  org               Org               @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  escalationPolicy  EscalationPolicy? @relation(fields: [escalationPolicyId], references: [id], onDelete: SetNull)
+  incidents         Incident[]
 
   @@unique([orgId, name])
   @@index([orgId])
@@ -147,6 +156,7 @@ model EscalationPolicy {
   org       Org              @relation(fields: [orgId], references: [id], onDelete: Cascade)
   steps     EscalationStep[]
   incidents Incident[]
+  services  Service[]
 
   @@unique([orgId, name])
   @@index([orgId])
@@ -208,6 +218,21 @@ model IncidentEvent {
 
   @@index([orgId])
   @@index([incidentId, createdAt])
+}
+
+model NotificationChannel {
+  id        String                  @id @default(cuid())
+  orgId     String
+  type      NotificationChannelType
+  name      String
+  config    Json
+  enabled   Boolean                 @default(true)
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+
+  org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
 }
 
 model ApiKey {

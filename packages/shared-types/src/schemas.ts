@@ -3,6 +3,7 @@ import { RoleSchema, PermissionSchema } from "./rbac";
 import {
   EscalationTargetTypeSchema,
   IncidentSeveritySchema,
+  NotificationChannelTypeSchema,
   ServiceStatusSchema,
 } from "./domain";
 
@@ -30,12 +31,14 @@ export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
 
 export const createServiceSchema = z.object({
   name: z.string().min(1).max(120),
+  escalationPolicyId: z.string().min(1).nullable().optional(),
 });
 export type CreateServiceInput = z.infer<typeof createServiceSchema>;
 
 export const updateServiceSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   currentStatus: ServiceStatusSchema.optional(),
+  escalationPolicyId: z.string().min(1).nullable().optional(),
 });
 export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;
 
@@ -43,8 +46,54 @@ export const createIncidentSchema = z.object({
   serviceId: z.string().min(1),
   title: z.string().min(1).max(200),
   severity: IncidentSeveritySchema.default("high"),
+  escalationPolicyId: z.string().min(1).optional(),
 });
 export type CreateIncidentInput = z.infer<typeof createIncidentSchema>;
+
+export const slackChannelConfigSchema = z.object({
+  webhookUrl: z.string().url(),
+});
+export const smsChannelConfigSchema = z.object({
+  to: z.string().min(8).max(20),
+});
+export const emailChannelConfigSchema = z.object({
+  to: z.string().email().optional(),
+});
+
+export const notificationChannelConfigSchema = z.union([
+  slackChannelConfigSchema,
+  smsChannelConfigSchema,
+  emailChannelConfigSchema,
+]);
+
+export const createNotificationChannelSchema = z
+  .object({
+    name: z.string().min(1).max(80),
+    type: NotificationChannelTypeSchema,
+    config: z.record(z.unknown()),
+    enabled: z.boolean().optional(),
+  })
+  .superRefine((input, ctx) => {
+    const parsed =
+      input.type === "slack"
+        ? slackChannelConfigSchema.safeParse(input.config)
+        : input.type === "sms"
+          ? smsChannelConfigSchema.safeParse(input.config)
+          : emailChannelConfigSchema.safeParse(input.config);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        ctx.addIssue({ ...issue, path: ["config", ...issue.path] });
+      }
+    }
+  });
+export type CreateNotificationChannelInput = z.infer<typeof createNotificationChannelSchema>;
+
+export const updateNotificationChannelSchema = z.object({
+  name: z.string().min(1).max(80).optional(),
+  enabled: z.boolean().optional(),
+  config: z.record(z.unknown()).optional(),
+});
+export type UpdateNotificationChannelInput = z.infer<typeof updateNotificationChannelSchema>;
 
 export const createApiKeySchema = z.object({
   name: z.string().min(1).max(80),

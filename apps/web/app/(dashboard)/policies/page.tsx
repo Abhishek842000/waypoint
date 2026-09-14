@@ -39,8 +39,8 @@ export default function PoliciesPage() {
         body: JSON.stringify({
           name,
           steps: [
-            { waitMinutes: 5, targetType: "rotation", targetRotationId: rotationId },
-            { waitMinutes: 5, targetType: "user", targetUserId: userId },
+            { waitMinutes: 1, targetType: "rotation", targetRotationId: rotationId },
+            { waitMinutes: 1, targetType: "user", targetUserId: userId },
           ],
         }),
       });
@@ -55,8 +55,8 @@ export default function PoliciesPage() {
     <div className="stack">
       <h1>Escalation policies</h1>
       <p className="muted">
-        Ordered steps. Wait windows are stored now; paging on those timers is
-        the next phase and will go through BullMQ.
+        Ordered steps. Step 0 is paged on trigger; <code>waitMinutes</code> is
+        the BullMQ delay before the next step (not a process timer).
       </p>
       <form className="card stack" onSubmit={create}>
         <strong>Create 2-step policy</strong>
@@ -65,7 +65,7 @@ export default function PoliciesPage() {
           <input value={name} onChange={(e) => setName(e.target.value)} required />
         </label>
         <label>
-          Step 0 — page rotation (wait 5 min)
+          Step 0 — page rotation (wait 1 min)
           <select value={rotationId} onChange={(e) => setRotationId(e.target.value)}>
             {rotations.map((r) => (
               <option key={r.id} value={r.id}>
