@@ -23,7 +23,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["tests/integration/**/*.spec.ts"],
+    include: ["tests/integration/**/*.spec.ts", "tests/unit/**/*.spec.ts"],
     setupFiles: ["tests/integration/setup.ts"],
     fileParallelism: false,
     testTimeout: 30_000,

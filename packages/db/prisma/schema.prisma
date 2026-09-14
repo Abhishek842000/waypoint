@@ -105,12 +105,14 @@ model Service {
 }
 
 model Rotation {
-  id             String   @id @default(cuid())
-  orgId          String
-  name           String
-  currentPointer Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  orgId                String
+  name                 String
+  currentPointer       Int      @default(0)
+  handoffIntervalDays  Int      @default(7)
+  lastHandoffAt        DateTime @default(now())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   org     Org              @relation(fields: [orgId], references: [id], onDelete: Cascade)
   members RotationMember[]

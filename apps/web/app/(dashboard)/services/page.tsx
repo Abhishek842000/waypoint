@@ -16,6 +16,19 @@ export default function ServicesPage() {
     refresh().catch((e: Error) => setError(e.message));
   }, []);
 
+  async function updateStatus(id: string, currentStatus: Service["currentStatus"]) {
+    setError(null);
+    try {
+      await api(`/v1/services/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ currentStatus }),
+      });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
+    }
+  }
+
   async function create(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -53,9 +66,17 @@ export default function ServicesPage() {
             <tr key={s.id}>
               <td>{s.name}</td>
               <td>
-                <span className={`badge ${s.currentStatus}`}>
-                  {s.currentStatus.replace("_", " ")}
-                </span>
+                <select
+                  value={s.currentStatus}
+                  onChange={(e) =>
+                    updateStatus(s.id, e.target.value as Service["currentStatus"])
+                  }
+                >
+                  <option value="operational">operational</option>
+                  <option value="degraded">degraded</option>
+                  <option value="partial_outage">partial_outage</option>
+                  <option value="major_outage">major_outage</option>
+                </select>
               </td>
             </tr>
           ))}

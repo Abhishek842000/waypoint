@@ -4,71 +4,63 @@ Hiring-manager resume notes live here so a new chat can pick up without rediscov
 
 ## Current phase
 
-**Phase 0 — Scaffolding, auth, multi-tenancy skeleton** ✅ complete
+**Phase 1 — Services, rotations, escalation policies** ✅ complete
 
-Verified locally: `pnpm lint` + `pnpm test` (6/6), API + worker + web running. Registered Acme, created Payments API, triggered "Checkout 500s", acknowledged it, public `/status/acme-…` showed the incident with a separate unauthenticated layout.
+**Phase 0 — Scaffolding, auth, multi-tenancy skeleton** ✅ complete
 
 ## What's built
 
-- pnpm workspaces monorepo: `apps/web`, `apps/api`, `apps/worker`, `packages/db`, `packages/shared-types`
-- Docker Compose: Postgres, Redis, API, worker, web
-- Full Prisma schema for the data model in the brief (plus denormalized `orgId` on child tables: `IncidentEvent`, `RotationMember`, `EscalationStep`)
-- Session auth: register (creates User + Org + admin Membership), login, logout, `GET /v1/auth/me`
-- API-key auth: `wp_live_…` via `Authorization: Bearer` or `X-Api-Key`, hashed at rest (SHA-256), scoped permissions
-- Unified `Actor` (`authMethod`, `userId`, `orgId`, `role`, `scopes`) so downstream code does not care how you authenticated
-- `tenantDb()` Prisma extension + `AsyncLocalStorage`. Tenant models cannot use `findUnique`. Creates **overwrite** `orgId`. Missing context throws.
-- `@RequirePermission('incident:acknowledge')` guard on mutating *and* read API routes
-- Services CRUD, incidents create/ack/resolve + immutable `IncidentEvent` timeline
-- Public `GET /v1/public/status/:orgSlug` still runs through `runWithTenant` after slug → orgId
-- Next.js dashboard (incidents, services, member invite) and a **separate** public status route with its own layout
-- Worker process connected to Redis; `escalate-incident` and `deliver-notification` processors are stubs
-- GitHub Actions: lint + integration tests against Postgres
+### Phase 1
+- Service CRUD unchanged: admin create/update/delete, all org roles can read; dashboard can patch status
+- Rotation CRUD: ordered `memberUserIds`, `currentlyOnCall` derived from `currentPointer`
+- Weekly handoff is a **BullMQ repeatable job** (`advance-rotations`, every 60s tick; advances when `handoffIntervalDays` elapsed). Not `setTimeout`.
+- Escalation policy CRUD: ordered steps targeting a rotation or a specific org user, `waitMinutes`, last step marked `isTerminal`
+- Dashboard pages: `/rotations`, `/policies`
+
+### Phase 0 (still true)
+- pnpm workspaces, Compose, Prisma tenancy extension, JWT + API keys, unified Actor, RBAC guard, incidents state machine, public status page, CI
 
 ## What's tested
 
-- **Tenancy:** org B `GET /v1/incidents/:id` for org A's incident → **404** (not empty list). Cross-tenant ack → 404. Stuffing `orgId` in a create body cannot write into another tenant.
-- **RBAC:** viewer can read, cannot create services / ack / resolve / invite (403 with permission name). Responder can ack, cannot invite. API key with `incident:create` can open an incident and cannot ack.
+- **Unit:** single-step (terminal) policy; user vs rotation target resolution; last-step-has-no-next; invalid mixed targets; pointer wrap + weekly due check
+- **Acceptance:** create 3-member rotation + 2-step policy; stored stepOrder and targets match
+- **Tenancy:** org B GET of org A's rotation/policy → 404; lists stay empty
+- **RBAC:** viewer can GET rotations, cannot POST rotation or policy (403)
+- **Handoff:** backdate `lastHandoffAt`, run `advanceDueRotations(now)`, pointer moves to the next member
+- Phase 0 tenancy/RBAC incident tests still required green
 
 ## Architectural decisions (defaults I picked)
 
 | Decision | Pick | Tradeoff |
 | --- | --- | --- |
-| API framework | NestJS | More ceremony than Express; guards/modules are the interview story |
-| ORM | Prisma | Extension API is ideal for forced scoping; Drizzle would be more SQL-shaped |
-| Auth | Nest JWT httpOnly cookie, not Auth.js/Clerk | Keeps actor resolution on the API. No social login yet |
-| Realtime | SSE planned (stub hook only) | SSE is enough for one-way incident timelines; WS if we add presence later |
-| Monorepo | pnpm workspaces, no Turbo | Less config; add Turbo if CI build graph becomes slow |
-| API runtime | `tsx` | Faster Phase 0. Compile before production hardening |
-| Public status | Next.js route + public API | Status page has no dashboard layout/session. Cache headers not applied yet |
+| On-call scheduling | Ordered roster + integer pointer, default 7-day interval | Not calendar coverage, overrides, or timezones |
+| Handoff timer | One repeatable BullMQ job scans due rotations | Simpler than one delayed job per rotation; 60s tick is demo-friendly |
+| Policy helpers | Pure functions in `packages/shared-types` | API hydrates `resolvedTarget`; worker will reuse this in Phase 2 |
 
-## Known simplifications / scope cuts (Phase 0)
+## Known simplifications / scope cuts
 
-- Escalation policies, rotations, and BullMQ *logic* are not implemented — only the worker process, job names, and schema
-- No WebSocket/SSE push (hook is a stub; do **not** poll as a substitute)
+- **No calendar-based on-call.** Weekly round-robin pointer only (deliberate).
+- Incident auto-escalation (page step 0, wait, page step 1) is **not** wired yet — waitMinutes is stored. Phase 2 will enqueue delayed BullMQ jobs on incident create and cancel them on ack/resolve.
+- Escalate-incident / deliver-notification processors remain stubs
+- No WebSocket/SSE push
 - Invites set a password directly (no email)
-- Users belong to one org in the JWT (first membership on login)
+- Users belong to one org in the JWT
 - Service status is not auto-updated when an incident is triggered
-- No outbound Slack/email yet
-- Demo GIF placeholder in README
-- Playwright e2e not started
-- Nest constructors use explicit `@Inject()` so the API can run under `tsx` (esbuild does not emit decorator metadata). Tests still use SWC with metadata.
-- Host Postgres is published on **5433** (this machine already had 5432). Web/API default to 3000/3001; if those are taken, `API_PORT` + `NEXT_PUBLIC_API_URL` + `WEB_ORIGIN`.
+- Host Postgres is on **5433**; web/API default 3000/3001 (this machine used 3010/3011)
 
 ## Next phase
 
-**Phase 1 — On-call rotations & escalation via BullMQ**
+**Phase 2 — Escalation timers on incidents**
 
-- Rotation CRUD + current pointer
-- Escalation policy steps
-- On incident create: enqueue `escalate-incident` delayed jobs (not `setTimeout`)
+- On incident create: enqueue delayed `escalate-incident` jobs from policy steps (BullMQ, not setTimeout)
 - Ack/resolve cancels pending jobs
-- Integration test: freeze/advance fake time or use short waitMinutes against Redis
+- Notify the resolved target (rotation current on-call or fixed user)
+- Integration test with short waitMinutes / fake clock
 
 ## How to resume
 
 ```bash
 cd waypoint
-cp .env.example .env   # if needed
 docker compose up -d postgres redis
 pnpm install
 pnpm db:migrate:deploy
@@ -76,4 +68,4 @@ pnpm test
 pnpm dev
 ```
 
-Read this file + `README.md` + `packages/db/src/tenancy.ts` + `apps/api/src/modules/rbac/` before writing feature code. Do not bypass `tenantDb()` or `@RequirePermission`.
+Do not bypass `tenantDb()` or `@RequirePermission`. Do not implement escalation waits with `setTimeout`.

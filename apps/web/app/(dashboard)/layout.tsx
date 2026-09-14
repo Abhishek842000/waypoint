@@ -37,6 +37,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const links = [
     ["/incidents", "Incidents"],
     ["/services", "Services"],
+    ["/rotations", "Rotations"],
+    ["/policies", "Policies"],
     ["/settings", "Settings"],
   ] as const;
 

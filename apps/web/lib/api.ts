@@ -35,6 +35,42 @@ export type Service = {
   currentStatus: "operational" | "degraded" | "partial_outage" | "major_outage";
 };
 
+export type Rotation = {
+  id: string;
+  name: string;
+  currentPointer: number;
+  handoffIntervalDays: number;
+  lastHandoffAt: string;
+  members: Array<{
+    id: string;
+    userId: string;
+    position: number;
+    user: { id: string; name?: string; email?: string };
+  }>;
+  currentlyOnCall: { userId: string; user: { name?: string; email?: string } } | null;
+};
+
+export type EscalationPolicy = {
+  id: string;
+  name: string;
+  steps: Array<{
+    id: string;
+    stepOrder: number;
+    waitMinutes: number;
+    targetType: "rotation" | "user";
+    targetRotationId: string | null;
+    targetUserId: string | null;
+    isTerminal: boolean;
+    resolvedTarget: { kind: string; userId?: string | null };
+  }>;
+};
+
+export type OrgMember = {
+  id: string;
+  role: string;
+  user: { id: string; email?: string; name?: string };
+};
+
 export type Incident = {
   id: string;
   title: string;
