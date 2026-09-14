@@ -34,6 +34,7 @@ export const TENANT_MODELS = new Set<Prisma.ModelName>([
   "EscalationStep",
   "Incident",
   "IncidentEvent",
+  "NotificationChannel",
   "ApiKey",
 ]);
 
