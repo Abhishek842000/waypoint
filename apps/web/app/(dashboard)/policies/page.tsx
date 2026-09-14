@@ -56,7 +56,9 @@ export default function PoliciesPage() {
       <h1>Escalation policies</h1>
       <p className="muted">
         Ordered steps. Step 0 is paged on trigger; <code>waitMinutes</code> is
-        the BullMQ delay before the next step (not a process timer).
+        the BullMQ delay before the next step (not a process timer). Set{" "}
+        <code>ESCALATION_DELAY_MULTIPLIER</code> (e.g. <code>10/300</code> so 5
+        minutes become 10 seconds) to demo without waiting.
       </p>
       <form className="card stack" onSubmit={create}>
         <strong>Create 2-step policy</strong>
