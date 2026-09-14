@@ -4,7 +4,7 @@ Multi-tenant incident response and public status pages — a PagerDuty + Statusp
 
 Organizations define services and on-call rotations. When something breaks, an incident is opened, responders act on a real state machine, and an **unauthenticated** status page reflects that org’s current and historical status. Every query is tenant-scoped at the data-access layer. Every mutating endpoint is gated by RBAC on the API, not by frontend route guards.
 
-> Phase 2: guarded incident state machine, timeline = IncidentEvent log, Slack (then Twilio/Resend) via one dispatcher, BullMQ escalation delays — still not `setTimeout`.
+> Phase 3: BullMQ delayed escalation in Redis survives killing the worker. `ESCALATION_DELAY_MULTIPLIER` shortens `waitMinutes` for demos (e.g. 5 minutes → 10 seconds). Still not `setTimeout`.
 
 ## Architecture
 
@@ -78,8 +78,9 @@ docker compose up --build
 2. Register Globex as Bob. Bob’s incident list is empty; requesting Alice’s incident id returns **404**, not an empty body.
 3. In Acme settings, invite two responders. Create a rotation of 3 people and a 2-step policy (rotation, then a specific user). GET the policy and confirm step order + targets.
 4. Invite a **viewer**. They can read rotations/policies, but creating either returns **403**.
-5. Settings → Slack incoming webhook. Trigger an incident (or curl with an API key). Slack fires; GET `/v1/incidents/:id/timeline` shows the event. Ack as a responder; a viewer posting acknowledge gets **403**. Escalation to step 1 waits `waitMinutes` on BullMQ (ack cancels it).
-6. CI runs lint + tenancy/RBAC/policy/escalation tests on every PR.
+5. Settings → Slack incoming webhook. Trigger an incident (or curl with an API key). Slack fires; GET `/v1/incidents/:id/timeline` shows the event. Ack as a responder; a viewer posting acknowledge gets **403**.
+6. Leave an incident unacked: with `ESCALATION_DELAY_MULTIPLIER=0.05` (3s per policy minute) it pages the next step on a BullMQ delay. Kill the worker, restart it, the job still fires — it was in Redis.
+7. CI runs lint + tenancy/RBAC/policy/escalation tests, including a spawned-worker restart spec, on every PR.
 
 ## Demo GIF
 
