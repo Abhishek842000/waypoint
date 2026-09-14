@@ -8,6 +8,7 @@ import { IncidentsModule } from "./modules/incidents/incidents.module";
 import { NotificationChannelsModule } from "./modules/notifications/notification-channels.module";
 import { OrgsModule } from "./modules/orgs/orgs.module";
 import { PermissionsGuard } from "./modules/rbac/permissions.guard";
+import { RealtimeModule } from "./modules/realtime/realtime.module";
 import { RotationsModule } from "./modules/rotations/rotations.module";
 import { ServicesModule } from "./modules/services/services.module";
 import { TenantContextInterceptor } from "./common/tenant.interceptor";
@@ -22,6 +23,7 @@ import { TenantContextInterceptor } from "./common/tenant.interceptor";
     EscalationPoliciesModule,
     IncidentsModule,
     NotificationChannelsModule,
+    RealtimeModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },

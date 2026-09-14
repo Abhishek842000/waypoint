@@ -27,6 +27,34 @@ export const serviceStatuses = [
 export const ServiceStatusSchema = z.enum(serviceStatuses);
 export type ServiceStatus = z.infer<typeof ServiceStatusSchema>;
 
+const serviceStatusRank: Record<ServiceStatus, number> = {
+  operational: 0,
+  degraded: 1,
+  partial_outage: 2,
+  major_outage: 3,
+};
+
+/** Map incident severity onto the public service status shown on /status/:slug. */
+export function serviceStatusForSeverity(severity: IncidentSeverity): ServiceStatus {
+  switch (severity) {
+    case "critical":
+      return "major_outage";
+    case "high":
+      return "partial_outage";
+    case "medium":
+    case "low":
+      return "degraded";
+  }
+}
+
+export function worstServiceStatus(statuses: readonly ServiceStatus[]): ServiceStatus {
+  return statuses.reduce<ServiceStatus>(
+    (worst, status) =>
+      serviceStatusRank[status] > serviceStatusRank[worst] ? status : worst,
+    "operational",
+  );
+}
+
 export const escalationTargetTypes = ["rotation", "user"] as const;
 export const EscalationTargetTypeSchema = z.enum(escalationTargetTypes);
 export type EscalationTargetType = z.infer<typeof EscalationTargetTypeSchema>;

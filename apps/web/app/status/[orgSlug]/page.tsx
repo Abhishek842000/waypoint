@@ -1,27 +1,15 @@
 import { API_URL } from "@/lib/api";
+import type { PublicStatusPayload } from "@waypoint/shared-types";
+import { PublicStatusRefresh } from "./refresh";
 
-type StatusPayload = {
-  org: { name: string; slug: string };
-  services: Array<{
-    id: string;
-    name: string;
-    currentStatus: string;
-  }>;
-  incidents: Array<{
-    id: string;
-    title: string;
-    status: string;
-    severity: string;
-    createdAt: string;
-  }>;
-};
+export const revalidate = 10;
 
-async function loadStatus(orgSlug: string): Promise<StatusPayload | null> {
+async function loadStatus(orgSlug: string): Promise<PublicStatusPayload | null> {
   const res = await fetch(`${API_URL}/v1/public/status/${orgSlug}`, {
-    cache: "no-store",
+    next: { revalidate: 10, tags: [`public-status:${orgSlug}`] },
   });
   if (!res.ok) return null;
-  return res.json();
+  return res.json() as Promise<PublicStatusPayload>;
 }
 
 export default async function PublicStatusPage({
@@ -44,6 +32,8 @@ export default async function PublicStatusPage({
   }
 
   const worst = worstStatus(data.services.map((s) => s.currentStatus));
+  const active = data.incidents.filter((i) => i.status !== "resolved");
+  const history = data.incidents.filter((i) => i.status === "resolved");
 
   return (
     <div className="status-shell">
@@ -55,6 +45,7 @@ export default async function PublicStatusPage({
         <p className="muted">
           Overall: <strong>{worst.replaceAll("_", " ")}</strong>
         </p>
+        <PublicStatusRefresh />
         <div className="card" style={{ marginTop: "1.5rem" }}>
           <h2>Services</h2>
           {data.services.map((s) => (
@@ -71,16 +62,32 @@ export default async function PublicStatusPage({
         </div>
         <div className="card" style={{ marginTop: "1rem" }}>
           <h2>Active incidents</h2>
-          {data.incidents.map((i) => (
+          {active.map((i) => (
             <div key={i.id} style={{ marginBottom: "0.8rem" }}>
               <strong>{i.title}</strong>{" "}
-              <span className={`badge ${i.status}`}>{i.status}</span>
+              <span className={`badge ${i.status}`}>{i.status}</span>{" "}
+              <span className={`badge ${i.severity}`}>{i.severity}</span>
               <div className="muted" style={{ fontSize: "0.85rem" }}>
                 {new Date(i.createdAt).toLocaleString()}
               </div>
             </div>
           ))}
-          {!data.incidents.length && <p className="muted">No active incidents.</p>}
+          {!active.length && <p className="muted">No active incidents.</p>}
+        </div>
+        <div className="card" style={{ marginTop: "1rem" }}>
+          <h2>Recent history</h2>
+          {history.map((i) => (
+            <div key={i.id} style={{ marginBottom: "0.8rem" }}>
+              <strong>{i.title}</strong>{" "}
+              <span className={`badge ${i.status}`}>{i.status}</span>
+              <div className="muted" style={{ fontSize: "0.85rem" }}>
+                {i.resolvedAt
+                  ? `Resolved ${new Date(i.resolvedAt).toLocaleString()}`
+                  : new Date(i.createdAt).toLocaleString()}
+              </div>
+            </div>
+          ))}
+          {!history.length && <p className="muted">No resolved incidents yet.</p>}
         </div>
       </div>
     </div>

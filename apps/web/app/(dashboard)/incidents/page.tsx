@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, type EscalationPolicy, type Incident, type MeResponse, type Service } from "@/lib/api";
+import { useIncidentRealtime } from "@/lib/realtime";
 
 export default function IncidentsPage() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -39,6 +40,12 @@ export default function IncidentsPage() {
     refresh().catch((e: Error) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useIncidentRealtime((event) => {
+    if (event.type === "incident.event") {
+      refresh().catch(() => undefined);
+    }
+  });
 
   async function createIncident(e: React.FormEvent) {
     e.preventDefault();

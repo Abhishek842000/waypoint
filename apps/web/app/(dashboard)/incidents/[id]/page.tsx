@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type Incident, type IncidentEvent, type MeResponse } from "@/lib/api";
+import { useIncidentRealtime } from "@/lib/realtime";
 
 export default function IncidentDetailPage() {
   const params = useParams<{ id: string }>();
@@ -13,7 +14,7 @@ export default function IncidentDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const canAct = me?.role === "admin" || me?.role === "responder";
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     const [i, t, who] = await Promise.all([
       api<Incident>(`/v1/incidents/${params.id}`),
       api<IncidentEvent[]>(`/v1/incidents/${params.id}/timeline`),
@@ -22,21 +23,17 @@ export default function IncidentDetailPage() {
     setIncident(i);
     setEvents(t);
     setMe(who);
-  }
-
-  useEffect(() => {
-    refresh().catch((e: Error) => setError(e.message));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
   useEffect(() => {
-    if (incident?.status !== "triggered") return;
-    const id = window.setInterval(() => {
+    refresh().catch((e: Error) => setError(e.message));
+  }, [refresh]);
+
+  const { connected } = useIncidentRealtime((event) => {
+    if (event.type === "incident.event" && event.incidentId === params.id) {
       refresh().catch(() => undefined);
-    }, 2000);
-    return () => window.clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [incident?.status, params.id]);
+    }
+  });
 
   async function act(action: "acknowledge" | "resolve") {
     setError(null);
@@ -65,6 +62,9 @@ export default function IncidentDetailPage() {
         <h1 style={{ margin: 0 }}>{incident.title}</h1>
         <span className={`badge ${incident.status}`}>{incident.status}</span>
         <span className={`badge ${incident.severity}`}>{incident.severity}</span>
+        <span className={`badge ${connected ? "operational" : "degraded"}`}>
+          {connected ? "live" : "offline"}
+        </span>
       </div>
       {canAct && (
         <div className="row">
@@ -85,7 +85,8 @@ export default function IncidentDetailPage() {
         <strong>Timeline</strong>
         <p className="muted" style={{ margin: 0 }}>
           Same ordered IncidentEvent log as GET /v1/incidents/:id/timeline — audit
-          and UI share one source of truth.
+          and UI share one source of truth. Updates arrive over org-scoped SSE,
+          not a timer.
         </p>
         <ol className="timeline">
           {events.map((event) => (
