@@ -1,2 +1,2 @@
-/** Phase 2: dedicated audit query API. IncidentEvent is the log in Phase 0. */
+/** Audit log is GET /v1/incidents/:id/timeline — the same IncidentEvent rows the UI reads. */
 export {};

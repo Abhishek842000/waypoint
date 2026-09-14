@@ -1,2 +1,2 @@
-/** Phase 2: inbound API-key webhooks + outbound Slack/email dispatch. */
+/** Outbound Slack/SMS/email dispatch lives in @waypoint/jobs; org channels are /v1/notification-channels. */
 export {};
