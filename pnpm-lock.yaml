@@ -53,6 +53,9 @@ importers:
       '@waypoint/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@waypoint/jobs':
+        specifier: workspace:*
+        version: link:../../packages/jobs
       '@waypoint/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
@@ -124,6 +127,9 @@ importers:
       '@waypoint/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@waypoint/jobs':
+        specifier: workspace:*
+        version: link:../../packages/jobs
       '@waypoint/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
@@ -153,6 +159,25 @@ importers:
       prisma:
         specifier: ^6.5.0
         version: 6.19.3(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
+  packages/jobs:
+    dependencies:
+      '@waypoint/db':
+        specifier: workspace:*
+        version: link:../db
+      '@waypoint/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+      bullmq:
+        specifier: ^5.40.0
+        version: 5.81.5
+      ioredis:
+        specifier: ^5.6.0
+        version: 5.11.1
+    devDependencies:
       typescript:
         specifier: ^5.7.3
         version: 5.9.3

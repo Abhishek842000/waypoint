@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@waypoint/db": "workspace:*",
+    "@waypoint/jobs": "workspace:*",
     "@waypoint/shared-types": "workspace:*",
     "bullmq": "^5.40.0",
     "ioredis": "^5.6.0"
