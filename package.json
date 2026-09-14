@@ -9,8 +9,10 @@
     "dev": "pnpm -r --parallel --filter @waypoint/api --filter @waypoint/web --filter @waypoint/worker run dev",
     "build": "pnpm -r run build",
     "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run lint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "db:generate": "pnpm --filter @waypoint/db generate",
     "db:migrate": "pnpm --filter @waypoint/db migrate",
     "db:migrate:deploy": "pnpm --filter @waypoint/db migrate:deploy"
@@ -24,6 +26,7 @@
     "supertest": "^7.0.0",
     "typescript": "^5.7.3",
     "unplugin-swc": "^1.5.5",
-    "vitest": "^3.0.8"
+    "vitest": "^3.0.8",
+    "@playwright/test": "^1.51.0"
   }
 }
