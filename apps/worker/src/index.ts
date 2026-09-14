@@ -41,9 +41,12 @@ async function main() {
     },
   );
 
-  escalateWorker.on("ready", () => console.log("[worker] escalate-incident ready"));
-  notifyWorker.on("ready", () => console.log("[worker] deliver-notification ready"));
-  rotationWorker.on("ready", () => console.log("[worker] advance-rotations ready"));
+  await Promise.all([
+    escalateWorker.waitUntilReady(),
+    notifyWorker.waitUntilReady(),
+    rotationWorker.waitUntilReady(),
+  ]);
+
   escalateWorker.on("failed", (job, err) =>
     console.error("[worker] escalate failed", job?.id, err),
   );
@@ -54,7 +57,11 @@ async function main() {
     console.error("[worker] rotation advance failed", job?.id, err),
   );
 
-  console.log("Waypoint worker started");
+  const multiplier = Number(process.env.ESCALATION_DELAY_MULTIPLIER ?? 1);
+  console.log("[worker] escalate-incident ready");
+  console.log(
+    `Waypoint worker started (escalation delay multiplier=${Number.isFinite(multiplier) ? multiplier : 1})`,
+  );
 }
 
 main().catch((err) => {

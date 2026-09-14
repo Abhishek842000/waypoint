@@ -15,11 +15,13 @@ export { pageIncidentStep, resolvePagedTarget, scheduleNextEscalation } from "./
 export { closeJobConnections } from "./queues";
 export {
   cancelIncidentEscalation,
+  delayedEscalationJobs,
   getEscalationScheduler,
   getFakeJobClock,
   scheduleEscalationStep,
   FakeClockScheduler,
 } from "./schedule";
+export { getEscalateQueue, getRedis } from "./queues";
 
 if (process.env.NODE_ENV === "test" || process.env.WAYPOINT_JOBS === "memory") {
   getFakeJobClock().setHandler(applyEscalationStep);

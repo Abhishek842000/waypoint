@@ -34,9 +34,9 @@ export function getNotifyQueue(): Queue {
 
 export async function closeJobConnections(): Promise<void> {
   await Promise.all([
-    escalateQueue?.close(),
-    notifyQueue?.close(),
-    connection?.quit(),
+    escalateQueue?.close().catch(() => undefined),
+    notifyQueue?.close().catch(() => undefined),
+    connection?.quit().catch(() => undefined),
   ]);
   escalateQueue = null;
   notifyQueue = null;

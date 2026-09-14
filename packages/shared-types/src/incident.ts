@@ -45,6 +45,19 @@ export function escalationJobId(incidentId: string, step: number): string {
   return `escalate:${incidentId}:${step}`;
 }
 
+/**
+ * Demo/CI shortcut: 5 policy minutes * (10 / 300) = 10 seconds.
+ * Production leaves this unset (multiplier 1). Read at call time so tests
+ * can change it without re-importing the module.
+ */
+export function escalationDelayMultiplier(): number {
+  const raw = process.env.ESCALATION_DELAY_MULTIPLIER;
+  if (raw === undefined || raw === "") return 1;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 1;
+  return n;
+}
+
 export function waitMinutesToDelayMs(waitMinutes: number): number {
-  return Math.max(0, waitMinutes) * 60_000;
+  return Math.round(Math.max(0, waitMinutes) * 60_000 * escalationDelayMultiplier());
 }

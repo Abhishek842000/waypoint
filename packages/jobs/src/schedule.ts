@@ -72,6 +72,9 @@ export class BullmqEscalationScheduler implements EscalationScheduler {
       removeOnComplete: true,
       removeOnFail: 50,
     });
+    console.log(
+      `[jobs] enqueue ${escalationJobId(payload.incidentId, payload.step)} delayMs=${delayMs}`,
+    );
   }
 
   async cancel(incidentId: string): Promise<void> {
@@ -89,7 +92,9 @@ const fakeClock = new FakeClockScheduler();
 const bullmq = new BullmqEscalationScheduler();
 
 function useMemoryJobs(): boolean {
-  return process.env.NODE_ENV === "test" || process.env.WAYPOINT_JOBS === "memory";
+  if (process.env.WAYPOINT_JOBS === "bullmq") return false;
+  if (process.env.WAYPOINT_JOBS === "memory") return true;
+  return process.env.NODE_ENV === "test";
 }
 
 export function getEscalationScheduler(): EscalationScheduler {
@@ -109,4 +114,10 @@ export async function scheduleEscalationStep(
 
 export async function cancelIncidentEscalation(incidentId: string): Promise<void> {
   await getEscalationScheduler().cancel(incidentId);
+}
+
+export async function delayedEscalationJobs(incidentId?: string) {
+  const jobs = await getEscalateQueue().getDelayed();
+  if (!incidentId) return jobs;
+  return jobs.filter((job) => job.data.incidentId === incidentId);
 }
