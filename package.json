@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "demo:record": "RECORD_DEMO=1 playwright test tests/e2e/demo-video.spec.ts",
     "db:generate": "pnpm --filter @waypoint/db generate",
     "db:migrate": "pnpm --filter @waypoint/db migrate",
     "db:migrate:deploy": "pnpm --filter @waypoint/db migrate:deploy"
