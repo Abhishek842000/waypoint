@@ -4,7 +4,9 @@ Multi-tenant incident response and public status pages — a PagerDuty + Statusp
 
 Organizations define services and on-call rotations. When something breaks, an incident is opened, responders act on a real state machine, and an **unauthenticated** status page reflects that org’s current and historical status. Every query is tenant-scoped at the data-access layer. Every mutating endpoint is gated by RBAC on the API, not by frontend route guards.
 
-> Phase 3: BullMQ delayed escalation in Redis survives killing the worker. `ESCALATION_DELAY_MULTIPLIER` shortens `waitMinutes` for demos (e.g. 5 minutes → 10 seconds). Still not `setTimeout`.
+> Phase 4: authenticated org-scoped SSE for live incident updates. Public `/status/:orgSlug` is a separate Next.js tree (no auth, ISR + on-demand revalidation) and is allow-listed so member emails never appear.
+
+## Architecture
 
 ## Architecture
 
@@ -12,7 +14,7 @@ Organizations define services and on-call rotations. When something breaks, an i
 flowchart LR
   subgraph clients [Clients]
     Web["Next.js dashboard<br/>authenticated"]
-    Status["/status/:orgSlug<br/>public, no dashboard layout"]
+    Status["/status/:orgSlug<br/>public, ISR, no dashboard layout"]
     Ext["External monitors<br/>API key"]
   end
 
@@ -20,7 +22,7 @@ flowchart LR
     Auth["AuthGuard<br/>session JWT or API key"]
     RBAC["PermissionsGuard<br/>@RequirePermission"]
     Tenant["tenantDb()<br/>Prisma extension + ALS"]
-    Nest["NestJS /v1"]
+    Nest["NestJS /v1 + SSE /v1/realtime/incidents"]
   end
 
   subgraph data [Data plane]
@@ -43,7 +45,7 @@ flowchart LR
 | DB | Prisma | Client extension can *force* `orgId` onto every tenant query |
 | Auth | Nest JWT cookie + API keys | Auth lives on the API (source of truth for actor/org/scopes). Auth.js would split session auth into Next and leave API keys on Nest |
 | Jobs | BullMQ worker | Escalation must survive process restart — never `setTimeout` |
-| Frontend | Next.js App Router | Dashboard route group is structurally separate from `/status/[orgSlug]` |
+| Frontend | Next.js App Router | Dashboard route group is structurally separate from `/status/[orgSlug]`; public page uses 10s ISR + on-demand revalidate |
 | Monorepo | pnpm workspaces | Solo-dev velocity; Turbo can land later if build graphs hurt |
 
 Tenancy is not an `org_id` filter sprinkled in controllers. `tenantDb()` refuses to run without AsyncLocalStorage context and **overwrites** any caller-supplied `orgId` on create.
@@ -80,7 +82,9 @@ docker compose up --build
 4. Invite a **viewer**. They can read rotations/policies, but creating either returns **403**.
 5. Settings → Slack incoming webhook. Trigger an incident (or curl with an API key). Slack fires; GET `/v1/incidents/:id/timeline` shows the event. Ack as a responder; a viewer posting acknowledge gets **403**.
 6. Leave an incident unacked: with `ESCALATION_DELAY_MULTIPLIER=0.05` (3s per policy minute) it pages the next step on a BullMQ delay. Kill the worker, restart it, the job still fires — it was in Redis.
-7. CI runs lint + tenancy/RBAC/policy/escalation tests, including a spawned-worker restart spec, on every PR.
+7. Open the same incident as Alice and Riley. Riley acks; Alice’s timeline flips to acknowledged **without refresh** (org-scoped SSE).
+8. Open `/status/<acme-slug>` logged out. The service shows a major outage and the incident appears. Globex’s slug does not.
+9. CI runs lint + tenancy/RBAC/policy/escalation/SSE/public-status tests, including a spawned-worker restart spec, on every PR.
 
 ## Demo GIF
 
@@ -95,19 +99,19 @@ _Placeholder — record after Phase 1 (escalation) when the loop is visible: tri
 - Compiled API (`tsc` → `dist`) instead of `tsx` in production images
 - Multi-org users with an org switcher (JWT currently binds one membership)
 - Hosted Auth.js/Clerk if we wanted social login without owning password hashing
-- Cache-Control + CDN on the public status route (it’s already a separate layout/data path)
+- Cache-Control + CDN in front of the public status API (the Next route already uses 10s ISR + on-demand revalidate; the API also sends a short `Cache-Control`)
 - Calendar-based on-call (coverage, overrides, timezones). Rotations are a manual ordered list + weekly round-robin pointer advanced by a BullMQ repeatable job.
 - OpenAPI spec generated from the Nest controllers
 
 ## Repo map
 
 ```
-apps/web          Next.js — (dashboard) vs /status/[orgSlug]
-apps/api          NestJS — auth, RBAC, tenancy, services, rotations, policies, incidents
+apps/web          Next.js — (dashboard) vs /status/[orgSlug] (ISR + SSE on dashboard)
+apps/api          NestJS — auth, RBAC, tenancy, incidents, SSE /v1/realtime/incidents
 apps/worker       BullMQ: weekly rotation handoff + delayed incident escalation
 packages/db       Prisma schema + tenantDb()
-packages/jobs     Shared page/notify/schedule used by API and worker
-packages/shared-types   Roles, permissions, incident states, policy/rotation helpers
-tests/unit        Policy, rotation pointer, incident state machine
-tests/integration Tenancy + RBAC + rotation/policy CRUD + escalation/Slack/timeline
+packages/jobs     Shared page/notify/schedule + org realtime bus
+packages/shared-types   Roles, permissions, incident states, public status allow-list
+tests/unit        Policy, rotation pointer, incident state machine, public payload
+tests/integration Tenancy + RBAC + escalation/Slack + SSE + public status isolation
 ```
