@@ -2,6 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 
+const recordDemo = Boolean(process.env.RECORD_DEMO);
+
 export default defineConfig({
   testDir: "tests/e2e",
   timeout: 180_000,
@@ -10,11 +12,14 @@ export default defineConfig({
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["list"]] : [["list"]],
+  testIgnore: recordDemo ? [] : ["**/demo-video.spec.ts"],
   use: {
     baseURL,
+    viewport: { width: 1280, height: 720 },
     trace: "retain-on-failure",
-    video: process.env.RECORD_DEMO ? "on" : "retain-on-failure",
+    video: recordDemo ? { mode: "on", size: { width: 1280, height: 720 } } : "retain-on-failure",
     screenshot: "only-on-failure",
+    launchOptions: recordDemo ? { slowMo: 220 } : undefined,
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: process.env.E2E_NO_WEBSERVER
