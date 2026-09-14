@@ -1,0 +1,29 @@
+{
+  "name": "waypoint",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter @waypoint/api --filter @waypoint/web --filter @waypoint/worker run dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "pnpm --filter @waypoint/db generate",
+    "db:migrate": "pnpm --filter @waypoint/db migrate",
+    "db:migrate:deploy": "pnpm --filter @waypoint/db migrate:deploy"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^11.0.11",
+    "@nestjs/testing": "^11.0.11",
+    "@swc/core": "^1.11.11",
+    "@types/supertest": "^6.0.2",
+    "reflect-metadata": "^0.2.2",
+    "supertest": "^7.0.0",
+    "typescript": "^5.7.3",
+    "unplugin-swc": "^1.5.5",
+    "vitest": "^3.0.8"
+  }
+}
