@@ -33,6 +33,41 @@ export type Service = {
   id: string;
   name: string;
   currentStatus: "operational" | "degraded" | "partial_outage" | "major_outage";
+  escalationPolicyId?: string | null;
+};
+
+export type IncidentEvent = {
+  id: string;
+  type: string;
+  createdAt: string;
+  payload: unknown;
+};
+
+export type Incident = {
+  id: string;
+  title: string;
+  status: "triggered" | "acknowledged" | "resolved";
+  severity: "critical" | "high" | "medium" | "low";
+  serviceId: string;
+  createdAt: string;
+  currentEscalationStep?: number;
+  events: IncidentEvent[];
+};
+
+export type NotificationChannel = {
+  id: string;
+  name: string;
+  type: "slack" | "sms" | "email";
+  enabled: boolean;
+  config: Record<string, unknown>;
+};
+
+export type ApiKey = {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  plaintext?: string;
 };
 
 export type Rotation = {
@@ -71,17 +106,3 @@ export type OrgMember = {
   user: { id: string; email?: string; name?: string };
 };
 
-export type Incident = {
-  id: string;
-  title: string;
-  status: "triggered" | "acknowledged" | "resolved";
-  severity: "critical" | "high" | "medium" | "low";
-  serviceId: string;
-  createdAt: string;
-  events: Array<{
-    id: string;
-    type: string;
-    createdAt: string;
-    payload: unknown;
-  }>;
-};
