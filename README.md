@@ -2,9 +2,9 @@
 
 Multi-tenant incident response and public status pages — a PagerDuty + Statuspage hybrid.
 
-Organizations define services and (in later phases) on-call rotations. When something breaks, an incident is opened, responders act on a real state machine, and an **unauthenticated** status page reflects that org’s current and historical status. Every query is tenant-scoped at the data-access layer. Every mutating endpoint is gated by RBAC on the API, not by frontend route guards.
+Organizations define services and on-call rotations. When something breaks, an incident is opened, responders act on a real state machine, and an **unauthenticated** status page reflects that org’s current and historical status. Every query is tenant-scoped at the data-access layer. Every mutating endpoint is gated by RBAC on the API, not by frontend route guards.
 
-> Phase 0 (this commit): scaffolding, auth, tenancy, RBAC, services/incidents CRUD, public status page, CI. Escalation timers and realtime push are stubbed, not faked.
+> Phase 1: services, rotations (weekly round-robin pointer via BullMQ), escalation policy steps. Incident auto-escalation timers are next — still not `setTimeout`.
 
 ## Architecture
 
@@ -76,8 +76,9 @@ docker compose up --build
 
 1. Register Acme as Alice (admin). Create a service + incident.
 2. Register Globex as Bob. Bob’s incident list is empty; requesting Alice’s incident id returns **404**, not an empty body.
-3. In Acme settings, invite a **viewer**. Log in as the viewer: they can read incidents, but Ack/Resolve returns **403**.
-4. CI runs the same tests on every PR (`.github/workflows/ci.yml`).
+3. In Acme settings, invite two responders. Create a rotation of 3 people and a 2-step policy (rotation, then a specific user). GET the policy and confirm step order + targets.
+4. Invite a **viewer**. They can read rotations/policies, but creating either returns **403**.
+5. CI runs lint + tenancy/RBAC/policy tests on every PR.
 
 ## Demo GIF
 
@@ -93,15 +94,17 @@ _Placeholder — record after Phase 1 (escalation) when the loop is visible: tri
 - Multi-org users with an org switcher (JWT currently binds one membership)
 - Hosted Auth.js/Clerk if we wanted social login without owning password hashing
 - Cache-Control + CDN on the public status route (it’s already a separate layout/data path)
+- Calendar-based on-call (coverage, overrides, timezones). Rotations are a manual ordered list + weekly round-robin pointer advanced by a BullMQ repeatable job.
 - OpenAPI spec generated from the Nest controllers
 
 ## Repo map
 
 ```
 apps/web          Next.js — (dashboard) vs /status/[orgSlug]
-apps/api          NestJS — auth, RBAC, tenancy, services, incidents
-apps/worker       BullMQ processors (stubs in Phase 0, wired to Redis)
+apps/api          NestJS — auth, RBAC, tenancy, services, rotations, policies, incidents
+apps/worker       BullMQ: weekly rotation handoff (live) + escalation/notify stubs
 packages/db       Prisma schema + tenantDb()
-packages/shared-types   Roles, permissions, incident states (single source of truth)
-tests/integration Tenancy isolation + RBAC boundary
+packages/shared-types   Roles, permissions, incident states, policy/rotation helpers
+tests/unit        Policy data model + rotation pointer
+tests/integration Tenancy isolation + RBAC boundary + rotation/policy CRUD
 ```
